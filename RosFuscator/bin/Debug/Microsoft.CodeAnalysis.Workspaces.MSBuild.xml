@@ -1,0 +1,599 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Microsoft.CodeAnalysis.Workspaces.MSBuild</name>
+    </assembly>
+    <members>
+        <member name="T:Microsoft.CodeAnalysis.MSBuild.MSBuildProjectLoader">
+            <summary>
+            An API for loading msbuild project files.
+            </summary>
+        </member>
+        <member name="M:Microsoft.CodeAnalysis.MSBuild.MSBuildProjectLoader.#ctor(Microsoft.CodeAnalysis.Workspace,System.Collections.Immutable.ImmutableDictionary{System.String,System.String})">
+            <summary>
+            Create a new instance of an <see cref="T:Microsoft.CodeAnalysis.MSBuild.MSBuildProjectLoader"/>.
+            </summary>
+            <param name="workspace">The workspace whose services this <see cref="T:Microsoft.CodeAnalysis.MSBuild.MSBuildProjectLoader"/> should use.</param>
+            <param name="properties">An optional dictionary of additional MSBuild properties and values to use when loading projects.
+            These are the same properties that are passed to msbuild via the /property:&lt;n&gt;=&lt;v&gt; command line argument.</param>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.MSBuild.MSBuildProjectLoader.Properties">
+            <summary>
+            The MSBuild properties used when interpreting project files.
+            These are the same properties that are passed to msbuild via the /property:&lt;n&gt;=&lt;v&gt; command line argument.
+            </summary>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.MSBuild.MSBuildProjectLoader.LoadMetadataForReferencedProjects">
+            <summary>
+            Determines if metadata from existing output assemblies is loaded instead of opening referenced projects.
+            If the referenced project is already opened, the metadata will not be loaded.
+            If the metadata assembly cannot be found the referenced project will be opened instead.
+            </summary>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.MSBuild.MSBuildProjectLoader.SkipUnrecognizedProjects">
+            <summary>
+            Determines if unrecognized projects are skipped when solutions or projects are opened.
+            
+            A project is unrecognized if it either has 
+              a) an invalid file path, 
+              b) a non-existent project file,
+              c) has an unrecognized file extension or 
+              d) a file extension associated with an unsupported language.
+            
+            If unrecognized projects cannot be skipped a corresponding exception is thrown.
+            </summary>
+        </member>
+        <member name="M:Microsoft.CodeAnalysis.MSBuild.MSBuildProjectLoader.AssociateFileExtensionWithLanguage(System.String,System.String)">
+            <summary>
+            Associates a project file extension with a language name.
+            </summary>
+            <param name="projectFileExtension">The project file extension to associate with <paramref name="language"/>.</param>
+            <param name="language">The language to associate with <paramref name="projectFileExtension"/>. This value
+            should typically be taken from <see cref="T:Microsoft.CodeAnalysis.LanguageNames"/>.</param>
+        </member>
+        <member name="M:Microsoft.CodeAnalysis.MSBuild.MSBuildProjectLoader.LoadSolutionInfoAsync(System.String,System.IProgress{Microsoft.CodeAnalysis.MSBuild.ProjectLoadProgress},Microsoft.Build.Framework.ILogger,System.Threading.CancellationToken)">
+            <summary>
+            Loads the <see cref="T:Microsoft.CodeAnalysis.SolutionInfo"/> for the specified solution file, including all projects referenced by the solution file and 
+            all the projects referenced by the project files.
+            </summary>
+            <param name="solutionFilePath">The path to the solution file to be loaded. This may be an absolute path or a path relative to the
+            current working directory.</param>
+            <param name="progress">An optional <see cref="T:System.IProgress`1"/> that will receive updates as the solution is loaded.</param>
+            <param name="msbuildLogger">An optional <see cref="T:Microsoft.Build.Framework.ILogger"/> that will log msbuild results.</param>
+            <param name="cancellationToken">An optional <see cref="T:System.Threading.CancellationToken"/> to allow cancellation of this operation.</param>
+        </member>
+        <member name="M:Microsoft.CodeAnalysis.MSBuild.MSBuildProjectLoader.LoadProjectInfoAsync(System.String,Microsoft.CodeAnalysis.MSBuild.ProjectMap,System.IProgress{Microsoft.CodeAnalysis.MSBuild.ProjectLoadProgress},Microsoft.Build.Framework.ILogger,System.Threading.CancellationToken)">
+            <summary>
+            Loads the <see cref="T:Microsoft.CodeAnalysis.ProjectInfo"/> from the specified project file and all referenced projects.
+            The first <see cref="T:Microsoft.CodeAnalysis.ProjectInfo"/> in the result corresponds to the specified project file.
+            </summary>
+            <param name="projectFilePath">The path to the project file to be loaded. This may be an absolute path or a path relative to the
+            current working directory.</param>
+            <param name="projectMap">An optional <see cref="T:Microsoft.CodeAnalysis.MSBuild.ProjectMap"/> that will be used to resolve project references to existing projects.
+            This is useful when populating a custom <see cref="T:Microsoft.CodeAnalysis.Workspace"/>.</param>
+            <param name="progress">An optional <see cref="T:System.IProgress`1"/> that will receive updates as the project is loaded.</param>
+            <param name="msbuildLogger">An optional <see cref="T:Microsoft.Build.Framework.ILogger"/> that will log msbuild results.</param>
+            <param name="cancellationToken">An optional <see cref="T:System.Threading.CancellationToken"/> to allow cancellation of this operation.</param>
+        </member>
+        <member name="F:Microsoft.CodeAnalysis.MSBuild.MSBuildProjectLoader.Worker._requestedProjectPaths">
+            <summary>
+            An ordered list of paths to project files that should be loaded. In the case of a solution,
+            this is the list of project file paths in the solution.
+            </summary>
+        </member>
+        <member name="F:Microsoft.CodeAnalysis.MSBuild.MSBuildProjectLoader.Worker._globalProperties">
+            <summary>
+            Global MSBuild properties to set when loading projects.
+            </summary>
+        </member>
+        <member name="F:Microsoft.CodeAnalysis.MSBuild.MSBuildProjectLoader.Worker._projectMap">
+            <summary>
+            Map of <see cref="T:Microsoft.CodeAnalysis.ProjectId"/>s, project paths, and output file paths.
+            </summary>
+        </member>
+        <member name="F:Microsoft.CodeAnalysis.MSBuild.MSBuildProjectLoader.Worker._progress">
+            <summary>
+            Progress reporter.
+            </summary>
+        </member>
+        <member name="F:Microsoft.CodeAnalysis.MSBuild.MSBuildProjectLoader.Worker._requestedProjectOptions">
+            <summary>
+            Provides options for how failures should be reported when loading requested project files.
+            </summary>
+        </member>
+        <member name="F:Microsoft.CodeAnalysis.MSBuild.MSBuildProjectLoader.Worker._discoveredProjectOptions">
+            <summary>
+            Provides options for how failures should be reported when loading any discovered project files.
+            </summary>
+        </member>
+        <member name="F:Microsoft.CodeAnalysis.MSBuild.MSBuildProjectLoader.Worker._preferMetadataForReferencesOfDiscoveredProjects">
+            <summary>
+            When true, metadata is preferred for any project reference unless the referenced project is already loaded
+            because it was requested.
+            </summary>
+        </member>
+        <member name="T:Microsoft.CodeAnalysis.MSBuild.MSBuildProjectLoader.Worker.ResolvedReferencesBuilder">
+            <summary>
+            This type helps produces lists of metadata and project references. Initially, it contains a list of metadata references.
+            As project references are added, the metadata references that match those project references are removed.
+            </summary>
+        </member>
+        <member name="F:Microsoft.CodeAnalysis.MSBuild.MSBuildProjectLoader.Worker.ResolvedReferencesBuilder._metadataReferences">
+            <summary>
+            The full list of <see cref="T:Microsoft.CodeAnalysis.MetadataReference"/>s.
+            </summary>
+        </member>
+        <member name="F:Microsoft.CodeAnalysis.MSBuild.MSBuildProjectLoader.Worker.ResolvedReferencesBuilder._pathToIndicesMap">
+            <summary>
+            A map of every metadata reference file paths to a set of indices whether than file path
+            exists in the list. It is expected that there may be multiple metadata references for the
+            same file path in the case where multiple extern aliases are provided.
+            </summary>
+        </member>
+        <member name="F:Microsoft.CodeAnalysis.MSBuild.MSBuildProjectLoader.Worker.ResolvedReferencesBuilder._indicesToRemove">
+            <summary>
+            A set of indeces into <see cref="F:Microsoft.CodeAnalysis.MSBuild.MSBuildProjectLoader.Worker.ResolvedReferencesBuilder._metadataReferences"/> that are to be removed.
+            </summary>
+        </member>
+        <member name="M:Microsoft.CodeAnalysis.MSBuild.MSBuildProjectLoader.Worker.ResolvedReferencesBuilder.Contains(System.String)">
+            <summary>
+            Returns true if a metadata reference with the given file path is contained within this list.
+            </summary>
+        </member>
+        <member name="M:Microsoft.CodeAnalysis.MSBuild.MSBuildProjectLoader.Worker.ResolvedReferencesBuilder.Remove(System.String)">
+            <summary>
+            Removes the metadata reference with the given file path from this list.
+            </summary>
+        </member>
+        <member name="T:Microsoft.CodeAnalysis.MSBuild.MSBuildWorkspace">
+            <summary>
+            A workspace that can be populated by opening MSBuild solution and project files.
+            </summary>
+        </member>
+        <member name="M:Microsoft.CodeAnalysis.MSBuild.MSBuildWorkspace.Create">
+            <summary>
+            Create a new instance of a workspace that can be populated by opening solution and project files.
+            </summary>
+        </member>
+        <member name="M:Microsoft.CodeAnalysis.MSBuild.MSBuildWorkspace.Create(System.Collections.Generic.IDictionary{System.String,System.String})">
+            <summary>
+            Create a new instance of a workspace that can be populated by opening solution and project files.
+            </summary>
+            <param name="properties">An optional set of MSBuild properties used when interpreting project files.
+            These are the same properties that are passed to msbuild via the /property:&lt;n&gt;=&lt;v&gt; command line argument.</param>
+        </member>
+        <member name="M:Microsoft.CodeAnalysis.MSBuild.MSBuildWorkspace.Create(Microsoft.CodeAnalysis.Host.HostServices)">
+            <summary>
+            Create a new instance of a workspace that can be populated by opening solution and project files.
+            </summary>
+            <param name="hostServices">The <see cref="T:Microsoft.CodeAnalysis.Host.HostServices"/> used to configure this workspace.</param>
+        </member>
+        <member name="M:Microsoft.CodeAnalysis.MSBuild.MSBuildWorkspace.Create(System.Collections.Generic.IDictionary{System.String,System.String},Microsoft.CodeAnalysis.Host.HostServices)">
+            <summary>
+            Create a new instance of a workspace that can be populated by opening solution and project files.
+            </summary>
+            <param name="properties">The MSBuild properties used when interpreting project files.
+            These are the same properties that are passed to msbuild via the /property:&lt;n&gt;=&lt;v&gt; command line argument.</param>
+            <param name="hostServices">The <see cref="T:Microsoft.CodeAnalysis.Host.HostServices"/> used to configure this workspace.</param>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.MSBuild.MSBuildWorkspace.Properties">
+            <summary>
+            The MSBuild properties used when interpreting project files.
+            These are the same properties that are passed to msbuild via the /property:&lt;n&gt;=&lt;v&gt; command line argument.
+            </summary>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.MSBuild.MSBuildWorkspace.Diagnostics">
+            <summary>
+            Diagnostics logged while opening solutions, projects and documents.
+            </summary>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.MSBuild.MSBuildWorkspace.LoadMetadataForReferencedProjects">
+            <summary>
+            Determines if metadata from existing output assemblies is loaded instead of opening referenced projects.
+            If the referenced project is already opened, the metadata will not be loaded.
+            If the metadata assembly cannot be found the referenced project will be opened instead.
+            </summary>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.MSBuild.MSBuildWorkspace.SkipUnrecognizedProjects">
+            <summary>
+            Determines if unrecognized projects are skipped when solutions or projects are opened.
+            
+            An project is unrecognized if it either has 
+              a) an invalid file path, 
+              b) a non-existent project file,
+              c) has an unrecognized file extension or 
+              d) a file extension associated with an unsupported language.
+            
+            If unrecognized projects cannot be skipped a corresponding exception is thrown.
+            </summary>
+        </member>
+        <member name="M:Microsoft.CodeAnalysis.MSBuild.MSBuildWorkspace.AssociateFileExtensionWithLanguage(System.String,System.String)">
+            <summary>
+            Associates a project file extension with a language name.
+            </summary>
+        </member>
+        <member name="M:Microsoft.CodeAnalysis.MSBuild.MSBuildWorkspace.CloseSolution">
+            <summary>
+            Close the open solution, and reset the workspace to a new empty solution.
+            </summary>
+        </member>
+        <member name="M:Microsoft.CodeAnalysis.MSBuild.MSBuildWorkspace.OpenSolutionAsync(System.String,System.IProgress{Microsoft.CodeAnalysis.MSBuild.ProjectLoadProgress},System.Threading.CancellationToken)">
+            <summary>
+            Open a solution file and all referenced projects.
+            </summary>
+            <param name="solutionFilePath">The path to the solution file to be opened. This may be an absolute path or a path relative to the
+            current working directory.</param>
+            <param name="progress">An optional <see cref="T:System.IProgress`1"/> that will receive updates as the solution is opened.</param>
+            <param name="cancellationToken">An optional <see cref="T:System.Threading.CancellationToken"/> to allow cancellation of this operation.</param>
+        </member>
+        <member name="M:Microsoft.CodeAnalysis.MSBuild.MSBuildWorkspace.OpenSolutionAsync(System.String,Microsoft.Build.Framework.ILogger,System.IProgress{Microsoft.CodeAnalysis.MSBuild.ProjectLoadProgress},System.Threading.CancellationToken)">
+            <summary>
+            Open a solution file and all referenced projects.
+            </summary>
+            <param name="solutionFilePath">The path to the solution file to be opened. This may be an absolute path or a path relative to the
+            current working directory.</param>
+            <param name="progress">An optional <see cref="T:System.IProgress`1"/> that will receive updates as the solution is opened.</param>
+            <param name="msbuildLogger">An optional <see cref="T:Microsoft.Build.Framework.ILogger"/> that will log msbuild results.</param>
+            <param name="cancellationToken">An optional <see cref="T:System.Threading.CancellationToken"/> to allow cancellation of this operation.</param>
+        </member>
+        <member name="M:Microsoft.CodeAnalysis.MSBuild.MSBuildWorkspace.OpenProjectAsync(System.String,System.IProgress{Microsoft.CodeAnalysis.MSBuild.ProjectLoadProgress},System.Threading.CancellationToken)">
+            <summary>
+            Open a project file and all referenced projects.
+            </summary>
+            <param name="projectFilePath">The path to the project file to be opened. This may be an absolute path or a path relative to the
+            current working directory.</param>
+            <param name="progress">An optional <see cref="T:System.IProgress`1"/> that will receive updates as the project is opened.</param>
+            <param name="cancellationToken">An optional <see cref="T:System.Threading.CancellationToken"/> to allow cancellation of this operation.</param>
+        </member>
+        <member name="M:Microsoft.CodeAnalysis.MSBuild.MSBuildWorkspace.OpenProjectAsync(System.String,Microsoft.Build.Framework.ILogger,System.IProgress{Microsoft.CodeAnalysis.MSBuild.ProjectLoadProgress},System.Threading.CancellationToken)">
+            <summary>
+            Open a project file and all referenced projects.
+            </summary>
+            <param name="projectFilePath">The path to the project file to be opened. This may be an absolute path or a path relative to the
+            current working directory.</param>
+            <param name="progress">An optional <see cref="T:System.IProgress`1"/> that will receive updates as the project is opened.</param>
+            <param name="msbuildLogger">An optional <see cref="T:Microsoft.Build.Framework.ILogger"/> that will log msbuild results..</param>
+            <param name="cancellationToken">An optional <see cref="T:System.Threading.CancellationToken"/> to allow cancellation of this operation.</param>
+        </member>
+        <member name="T:Microsoft.CodeAnalysis.MSBuild.Conversions">
+            <summary>
+            Handles conversions from MSBuild values.
+            </summary>
+        </member>
+        <member name="T:Microsoft.CodeAnalysis.MSBuild.DocumentFileInfo">
+            <summary>
+            Represents a source file that is part of a project file.
+            </summary>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.MSBuild.DocumentFileInfo.FilePath">
+            <summary>
+            The absolute path to the document file on disk.
+            </summary>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.MSBuild.DocumentFileInfo.LogicalPath">
+            <summary>
+            A fictional path to the document, relative to the project.
+            The document may not actually exist at this location, and is used
+            to represent linked documents. This includes the file name.
+            </summary>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.MSBuild.DocumentFileInfo.IsLinked">
+            <summary>
+            True if the document has a logical path that differs from its 
+            absolute file path.
+            </summary>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.MSBuild.DocumentFileInfo.IsGenerated">
+            <summary>
+            True if the file was generated during build.
+            </summary>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.MSBuild.DocumentFileInfo.SourceCodeKind">
+            <summary>
+            The <see cref="P:Microsoft.CodeAnalysis.MSBuild.DocumentFileInfo.SourceCodeKind"/> of this document.
+            </summary>
+        </member>
+        <member name="M:Microsoft.CodeAnalysis.MSBuild.Extensions.CreateProjectFileReference(Microsoft.Build.Execution.ProjectItemInstance)">
+            <summary>
+            Create a <see cref="T:Microsoft.CodeAnalysis.MSBuild.ProjectFileReference"/> from a ProjectReference node in the MSBuild file.
+            </summary>
+        </member>
+        <member name="T:Microsoft.CodeAnalysis.MSBuild.IProjectFile">
+            <summary>
+            Represents a project file loaded from disk.
+            </summary>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.MSBuild.IProjectFile.FilePath">
+            <summary>
+            The path to the project file.
+            </summary>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.MSBuild.IProjectFile.Log">
+            <summary>
+            The error message produced when a failure occurred attempting to access the project file. 
+            If a failure occurred the project file info will be inaccessible.
+            </summary>
+        </member>
+        <member name="M:Microsoft.CodeAnalysis.MSBuild.IProjectFile.GetProjectFileInfosAsync(System.Threading.CancellationToken)">
+            <summary>
+            Gets project file information asynchronously. Note that this can produce multiple
+            instances of <see cref="T:Microsoft.CodeAnalysis.MSBuild.ProjectFileInfo"/> if the project is multi-targeted: one for
+            each target framework.
+            </summary>
+        </member>
+        <member name="M:Microsoft.CodeAnalysis.MSBuild.IProjectFile.GetDocumentExtension(Microsoft.CodeAnalysis.SourceCodeKind)">
+            <summary>
+            Gets the corresponding extension for a source file of a given kind.
+            </summary>
+        </member>
+        <member name="M:Microsoft.CodeAnalysis.MSBuild.IProjectFile.AddDocument(System.String,System.String)">
+            <summary>
+            Add a source document to a project file.
+            </summary>
+        </member>
+        <member name="M:Microsoft.CodeAnalysis.MSBuild.IProjectFile.RemoveDocument(System.String)">
+            <summary>
+            Remove a source document from a project file.
+            </summary>
+        </member>
+        <member name="M:Microsoft.CodeAnalysis.MSBuild.IProjectFile.AddMetadataReference(Microsoft.CodeAnalysis.MetadataReference,Microsoft.CodeAnalysis.AssemblyIdentity)">
+            <summary>
+             Add a metadata reference to a project file.
+            </summary>
+        </member>
+        <member name="M:Microsoft.CodeAnalysis.MSBuild.IProjectFile.RemoveMetadataReference(Microsoft.CodeAnalysis.MetadataReference,Microsoft.CodeAnalysis.AssemblyIdentity)">
+            <summary>
+            Remove a metadata reference from a project file.
+            </summary>
+        </member>
+        <member name="M:Microsoft.CodeAnalysis.MSBuild.IProjectFile.AddProjectReference(System.String,Microsoft.CodeAnalysis.MSBuild.ProjectFileReference)">
+            <summary>
+            Add a reference to another project to a project file.
+            </summary>
+        </member>
+        <member name="M:Microsoft.CodeAnalysis.MSBuild.IProjectFile.RemoveProjectReference(System.String,System.String)">
+            <summary>
+            Remove a reference to another project from a project file.
+            </summary>
+        </member>
+        <member name="M:Microsoft.CodeAnalysis.MSBuild.IProjectFile.AddAnalyzerReference(Microsoft.CodeAnalysis.Diagnostics.AnalyzerReference)">
+            <summary>
+            Add an analyzer reference to the project file.
+            </summary>
+        </member>
+        <member name="M:Microsoft.CodeAnalysis.MSBuild.IProjectFile.RemoveAnalyzerReference(Microsoft.CodeAnalysis.Diagnostics.AnalyzerReference)">
+            <summary>
+            Remove an analyzer reference from the project file.
+            </summary>
+        </member>
+        <member name="M:Microsoft.CodeAnalysis.MSBuild.IProjectFile.Save">
+            <summary>
+            Save the current state of the project file to disk.
+            </summary>
+        </member>
+        <member name="M:Microsoft.CodeAnalysis.MSBuild.ProjectFile.GetAbsolutePathRelativeToProject(System.String)">
+            <summary>
+            Resolves the given path that is possibly relative to the project directory.
+            </summary>
+            <remarks>
+            The resulting path is absolute but might not be normalized.
+            </remarks>
+        </member>
+        <member name="T:Microsoft.CodeAnalysis.MSBuild.ProjectFileInfo">
+            <summary>
+            Provides information about a project that has been loaded from disk and
+            built with MSBuild. If the project is multi-targeting, this represents
+            the information from a single target framework.
+            </summary>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.MSBuild.ProjectFileInfo.Language">
+            <summary>
+            The language of this project.
+            </summary>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.MSBuild.ProjectFileInfo.FilePath">
+            <summary>
+            The path to the project file for this project.
+            </summary>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.MSBuild.ProjectFileInfo.OutputFilePath">
+            <summary>
+            The path to the output file this project generates.
+            </summary>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.MSBuild.ProjectFileInfo.OutputRefFilePath">
+            <summary>
+            The path to the reference assembly output file this project generates.
+            </summary>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.MSBuild.ProjectFileInfo.DefaultNamespace">
+            <summary>
+            The default namespace of the project ("" if not defined, which means global namespace),
+            or null if it is unknown or not applicable. 
+            </summary>
+            <remarks>
+            Right now VB doesn't have the concept of "default namespace". But we conjure one in workspace 
+            by assigning the value of the project's root namespace to it. So various feature can choose to 
+            use it for their own purpose.
+            In the future, we might consider officially exposing "default namespace" for VB project 
+            (e.g. through a "defaultnamespace" msbuild property)
+            </remarks>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.MSBuild.ProjectFileInfo.TargetFramework">
+            <summary>
+            The target framework of this project.
+            This takes the form of the 'short name' form used by NuGet (e.g. net46, netcoreapp2.0, etc.)
+            </summary>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.MSBuild.ProjectFileInfo.CommandLineArgs">
+            <summary>
+            The command line args used to compile the project.
+            </summary>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.MSBuild.ProjectFileInfo.Documents">
+            <summary>
+            The source documents.
+            </summary>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.MSBuild.ProjectFileInfo.AdditionalDocuments">
+            <summary>
+            The additional documents.
+            </summary>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.MSBuild.ProjectFileInfo.AnalyzerConfigDocuments">
+            <summary>
+            The analyzer config documents.
+            </summary>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.MSBuild.ProjectFileInfo.ProjectReferences">
+            <summary>
+            References to other projects.
+            </summary>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.MSBuild.ProjectFileInfo.Log">
+            <summary>
+            The error message produced when a failure occurred attempting to get the info. 
+            If a failure occurred some or all of the information may be inaccurate or incomplete.
+            </summary>
+        </member>
+        <member name="M:Microsoft.CodeAnalysis.MSBuild.ProjectFileLoaderRegistry.AssociateFileExtensionWithLanguage(System.String,System.String)">
+            <summary>
+            Associates a project file extension with a language name.
+            </summary>
+        </member>
+        <member name="T:Microsoft.CodeAnalysis.MSBuild.ProjectFileReference">
+            <summary>
+            Represents a reference to another project file.
+            </summary>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.MSBuild.ProjectFileReference.Path">
+            <summary>
+            The path on disk to the other project file. 
+            This path may be relative to the referencing project's file or an absolute path.
+            </summary>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.MSBuild.ProjectFileReference.Aliases">
+            <summary>
+            The aliases assigned to this reference, if any.
+            </summary>
+        </member>
+        <member name="T:Microsoft.CodeAnalysis.MSBuild.ProjectLoadOperation">
+            <summary>
+            Various operations that occur during a project load.
+            </summary>
+        </member>
+        <member name="F:Microsoft.CodeAnalysis.MSBuild.ProjectLoadOperation.Evaluate">
+            <summary>
+            Represents the MSBuild evaluation of a project. This occurs before <see cref="F:Microsoft.CodeAnalysis.MSBuild.ProjectLoadOperation.Build"/>
+            to evalute the project file before any tasks are executed.
+            </summary>
+        </member>
+        <member name="F:Microsoft.CodeAnalysis.MSBuild.ProjectLoadOperation.Build">
+            <summary>
+            Represents the MSBuild design-time build of a project. This build does not produce any
+            any compiled binaries, but computes the information need to compile the project, such
+            as compiler flags, source files and references.
+            </summary>
+        </member>
+        <member name="F:Microsoft.CodeAnalysis.MSBuild.ProjectLoadOperation.Resolve">
+            <summary>
+            Represents a resolution step that occurs after the MSBuild design-time build. This step
+            performs final logic to resolve metadata and project references and produces the information
+            needed to populate a <see cref="T:Microsoft.CodeAnalysis.Workspace"/>.
+            </summary>
+        </member>
+        <member name="T:Microsoft.CodeAnalysis.MSBuild.ProjectLoadProgress">
+            <summary>
+            Provides details as a project is loaded.
+            </summary>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.MSBuild.ProjectLoadProgress.FilePath">
+            <summary>
+            The project for which progress is being reported.
+            </summary>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.MSBuild.ProjectLoadProgress.Operation">
+            <summary>
+            The operation that has just completed.
+            </summary>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.MSBuild.ProjectLoadProgress.TargetFramework">
+            <summary>
+            The target framework of the project being built or resolved. This property is only valid for SDK-style projects
+            during the <see cref="F:Microsoft.CodeAnalysis.MSBuild.ProjectLoadOperation.Resolve"/> operation.
+            </summary>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.MSBuild.ProjectLoadProgress.ElapsedTime">
+            <summary>
+            The amount of time elapsed for this operation.
+            </summary>
+        </member>
+        <member name="T:Microsoft.CodeAnalysis.MSBuild.ProjectMap">
+            <summary>
+            A map of projects that can be optionally used with <see cref="M:Microsoft.CodeAnalysis.MSBuild.MSBuildProjectLoader.LoadProjectInfoAsync(System.String,Microsoft.CodeAnalysis.MSBuild.ProjectMap,System.IProgress{Microsoft.CodeAnalysis.MSBuild.ProjectLoadProgress},Microsoft.Build.Framework.ILogger,System.Threading.CancellationToken)"/> when loading a
+            project into a custom <see cref="T:Microsoft.CodeAnalysis.Workspace"/>. To use, pass <see cref="P:Microsoft.CodeAnalysis.Workspace.CurrentSolution"/> to <see cref="M:Microsoft.CodeAnalysis.MSBuild.ProjectMap.Create(Microsoft.CodeAnalysis.Solution)"/>.
+            </summary>
+        </member>
+        <member name="F:Microsoft.CodeAnalysis.MSBuild.ProjectMap._projectPathToProjectIdsMap">
+            <summary>
+            A map of project path to <see cref="T:Microsoft.CodeAnalysis.ProjectId"/>s. Note that there can be multiple <see cref="T:Microsoft.CodeAnalysis.ProjectId"/>s per project path
+            if the project is multi-targeted -- one for each target framework.
+            </summary>
+        </member>
+        <member name="F:Microsoft.CodeAnalysis.MSBuild.ProjectMap._projectPathToProjectInfosMap">
+            <summary>
+            A map of project path to <see cref="T:Microsoft.CodeAnalysis.ProjectInfo"/>s. Note that there can be multiple <see cref="T:Microsoft.CodeAnalysis.ProjectId"/>s per project path
+            if the project is multi-targeted -- one for each target framework.
+            </summary>
+        </member>
+        <member name="F:Microsoft.CodeAnalysis.MSBuild.ProjectMap._projectIdToOutputFilePathMap">
+            <summary>
+            A map of <see cref="T:Microsoft.CodeAnalysis.ProjectId"/> to the output file of the project (if any).
+            </summary>
+        </member>
+        <member name="F:Microsoft.CodeAnalysis.MSBuild.ProjectMap._projectIdToOutputRefFilePathMap">
+            <summary>
+            A map of <see cref="T:Microsoft.CodeAnalysis.ProjectId"/> to the output ref file of the project (if any).
+            </summary>
+        </member>
+        <member name="M:Microsoft.CodeAnalysis.MSBuild.ProjectMap.Create">
+            <summary>
+            Create an empty <see cref="T:Microsoft.CodeAnalysis.MSBuild.ProjectMap"/>.
+            </summary>
+        </member>
+        <member name="M:Microsoft.CodeAnalysis.MSBuild.ProjectMap.Create(Microsoft.CodeAnalysis.Solution)">
+            <summary>
+            Create a <see cref="T:Microsoft.CodeAnalysis.MSBuild.ProjectMap"/> populated with the given <see cref="T:Microsoft.CodeAnalysis.Solution"/>.
+            </summary>
+            <param name="solution">The <see cref="T:Microsoft.CodeAnalysis.Solution"/> to populate the new <see cref="T:Microsoft.CodeAnalysis.MSBuild.ProjectMap"/> with.</param>
+            <returns></returns>
+        </member>
+        <member name="M:Microsoft.CodeAnalysis.MSBuild.ProjectMap.Add(Microsoft.CodeAnalysis.Project)">
+            <summary>
+            Add a <see cref="T:Microsoft.CodeAnalysis.Project"/> to this <see cref="T:Microsoft.CodeAnalysis.MSBuild.ProjectMap"/>.
+            </summary>
+            <param name="project">The <see cref="T:Microsoft.CodeAnalysis.Project"/> to add to this <see cref="T:Microsoft.CodeAnalysis.MSBuild.ProjectMap"/>.</param>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.WorkspaceMSBuildResources.Duplicate_project_discovered_and_skipped_0">
+            <summary>Duplicate project discovered and skipped: {0}</summary>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.WorkspaceMSBuildResources.Found_project_reference_without_a_matching_metadata_reference_0">
+            <summary>Found project reference without a matching metadata reference: {0}</summary>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.WorkspaceMSBuildResources.Found_project_with_the_same_file_path_and_output_path_as_another_project_0">
+            <summary>Found project with the same file path and output path as another project: {0}</summary>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.WorkspaceMSBuildResources.Msbuild_failed_when_processing_the_file_0">
+            <summary>Msbuild failed when processing the file '{0}'</summary>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.WorkspaceMSBuildResources.Msbuild_failed_when_processing_the_file_0_with_message_1">
+            <summary>Msbuild failed when processing the file '{0}' with message: {1}</summary>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.WorkspaceMSBuildResources.Project_does_not_contain_0_target">
+            <summary>Project does not contain '{0}' target.</summary>
+        </member>
+        <member name="P:Microsoft.CodeAnalysis.WorkspaceMSBuildResources.Unresolved_metadata_reference_removed_from_project_0">
+            <summary>Unresolved metadata reference removed from project: {0}</summary>
+        </member>
+    </members>
+</doc>

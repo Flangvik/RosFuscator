@@ -5,11 +5,11 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("RosFuscator")]
+[assembly: AssemblyTitle("StackOverflowExample")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("RosFuscator")]
+[assembly: AssemblyProduct("StackOverflowExample")]
 [assembly: AssemblyCopyright("Copyright ©  2021")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
@@ -20,7 +20,7 @@ using System.Runtime.InteropServices;
 [assembly: ComVisible(false)]
 
 // The following GUID is for the ID of the typelib if this project is exposed to COM
-[assembly: Guid("01f05fef-4e5e-47f8-904d-9742dfd2d185")]
+[assembly: Guid("22eedb59-91a9-4c57-a01f-993771d057c1")]
 
 // Version information for an assembly consists of the following four values:
 //
